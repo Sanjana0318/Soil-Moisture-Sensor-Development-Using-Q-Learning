@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federated Q-Learning Model</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .dashboard-header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            margin-bottom: 20px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: none;
+        }
+        .card-header {
+            background-color: #6f42c1;
+            color: white;
+            border-radius: 10px 10px 0 0 !important;
+            font-weight: bold;
+        }
+        .model-card {
+            height: 100%;
+        }
+        .prediction-display {
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.03);
+            border-radius: 8px;
+        }
+        .prediction-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .q-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .q-table th, .q-table td {
+            border: 1px solid #ddd;
+            padding: 4px;
+            text-align: center;
+            font-size: 0.7rem;
+        }
+        .q-table th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        .state-action-info {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .metric-value {
+            font-weight: bold;
+            color: #6f42c1;
+        }
+        .progress-thin {
+            height: 6px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-8">
+                    <h1>Federated Q-Learning Model</h1>
+                    <p class="mb-0">Combining federated learning with reinforcement learning</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <a href="/" class="btn btn-light">← Back to Main Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        Federated Q-Learning Predictions
+                        <span id="fq-score" class="badge bg-light text-dark float-end">R²: --</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="state-action-info">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <small>Current State:</small>
+                                    <div class="metric-value" id="current-state">--</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <small>Selected Action:</small>
+                                    <div class="metric-value" id="current-action">--</div>
+                                </div>
+                                <div class="col-md-4">
+                                    <small>Last Reward:</small>
+                                    <div class="metric-value" id="current-reward">--</div>
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <small>Exploration Rate:</small>
+                                <div class="progress progress-thin">
+                                    <div id="exploration-progress" class="progress-bar bg-warning" role="progressbar" style="width: 25%"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="prediction-display">
+                            <div class="prediction-value" id="fq-prediction">--%</div>
+                            <div class="prediction-label">Predicted Soil Moisture</div>
+                        </div>
+                        <canvas id="fqChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Q-Learning Matrix</div>
+                    <div class="card-body">
+                        <div class="alert alert-info p-2 mb-3">
+                            <small>Heatmap shows Q-values for state-action pairs. Darker green indicates higher expected rewards.</small>
+                        </div>
+                        <div id="q-table-container" style="overflow-x: auto;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">Model Performance Comparison</div>
+                    <div class="card-body">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Learning Metrics</div>
+                    <div class="card-body">
+                        <canvas id="learningChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">Model Architecture</div>
+                    <div class="card-body">
+                        <h5>Federated Q-Learning Components</h5>
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Local Models</span>
+                                <span class="badge bg-primary">3 Field-specific</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Global Model</span>
+                                <span class="badge bg-success">Aggregated</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>State Space</span>
+                                <span class="badge bg-info">20×20</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Learning Rate</span>
+                                <span class="badge bg-warning text-dark" id="learning-rate-badge">0.15</span>
+                            </div>
+                        </div>
+                        <hr>
+                        <h5 class="mt-3">Advantages</h5>
+                        <ul class="fa-ul">
+                            <li><span class="fa-li"><i class="fas fa-check-circle text-success"></i></span>Adapts to each field's unique conditions</li>
+                            <li><span class="fa-li"><i class="fas fa-check-circle text-success"></i></span>Learns optimal strategies over time</li>
+                            <li><span class="fa-li"><i class="fas fa-check-circle text-success"></i></span>Maintains data privacy</li>
+                            <li><span class="fa-li"><i class="fas fa-check-circle text-success"></i></span>Balances exploration and exploitation</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/js/all.min.js"></script>
+    <script>
+        let socket;
+        let fqChart;
+        let comparisonChart;
+        let learningChart;
+        let rewardHistory = [];
+        let scoreHistory = [];
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            initializeCharts();
+        });
+
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('ml_predictions', function(predictions) {
+                if (predictions.federated_q) {
+                    updateFQModel(predictions.federated_q);
+                    updateComparisonChart(predictions);
+                    updateLearningMetrics(predictions.federated_q);
+                }
+            });
+        }
+        
+        function initializeCharts() {
+            // Federated Q-learning chart
+            fqChart = new Chart(
+                document.getElementById('fqChart'),
+                {
+                    type: 'scatter',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Prediction',
+                                data: [],
+                                borderColor: 'rgb(111, 66, 193)',
+                                backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                showLine: true
+                            },
+                            {
+                                label: 'Actual',
+                                data: [],
+                                backgroundColor: 'rgb(54, 162, 235)',
+                                pointRadius: 5
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: { display: true, text: 'Temperature vs. Soil Moisture' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `${context.dataset.label}: ${context.parsed.x.toFixed(1)}°C, ${context.parsed.y.toFixed(1)}%`;
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: { 
+                                title: { display: true, text: 'Temperature (°C)' },
+                                min: 15,
+                                max: 35
+                            },
+                            y: { 
+                                title: { display: true, text: 'Soil Moisture (%)' },
+                                min: 0,
+                                max: 100
+                            }
+                        }
+                    }
+                }
+            );
+            
+            // Comparison chart
+            comparisonChart = new Chart(
+                document.getElementById('comparisonChart'),
+                {
+                    type: 'bar',
+                    data: {
+                        labels: ['Decision Tree', 'SVM', 'Gradient Boosting', 'Federated Q'],
+                        datasets: [{
+                            label: 'Model Performance (R² Score)',
+                            data: [0, 0, 0, 0],
+                            backgroundColor: [
+                                'rgba(255, 99, 132, 0.7)',
+                                'rgba(75, 192, 192, 0.7)',
+                                'rgba(54, 162, 235, 0.7)',
+                                'rgba(111, 66, 193, 0.7)'
+                            ],
+                            borderColor: [
+                                'rgba(255, 99, 132, 1)',
+                                'rgba(75, 192, 192, 1)',
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(111, 66, 193, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            y: { 
+                                beginAtZero: true,
+                                max: 1,
+                                title: {
+                                    display: true,
+                                    text: 'R² Score'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        return `R²: ${context.raw.toFixed(3)}`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+            
+            // Learning metrics chart
+            learningChart = new Chart(
+                document.getElementById('learningChart'),
+                {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Reward',
+                                data: [],
+                                borderColor: 'rgb(75, 192, 192)',
+                                backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                                tension: 0.1,
+                                yAxisID: 'y'
+                            },
+                            {
+                                label: 'R² Score',
+                                data: [],
+                                borderColor: 'rgb(153, 102, 255)',
+                                backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                                tension: 0.1,
+                                yAxisID: 'y1'
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        scales: {
+                            y: {
+                                type: 'linear',
+                                display: true,
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Reward'
+                                }
+                            },
+                            y1: {
+                                type: 'linear',
+                                display: true,
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'R² Score'
+                                },
+                                min: -1,
+                                max: 1,
+                                grid: {
+                                    drawOnChartArea: false
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+        }
+        
+        function updateFQModel(prediction) {
+            // Update prediction display
+            document.getElementById('fq-prediction').textContent = `${prediction.current_pred}%`;
+            document.getElementById('fq-score').textContent = `R²: ${prediction.score.toFixed(3)}`;
+            
+            // Update state-action info
+            document.getElementById('current-state').textContent = `S${prediction.state}`;
+            document.getElementById('current-action').textContent = `A${prediction.action}`;
+            document.getElementById('current-reward').textContent = prediction.reward.toFixed(3);
+            
+            // Update chart
+            fqChart.data.datasets[0].data = prediction.X.map((x, i) => ({
+                x: x,
+                y: prediction.y[i]
+            }));
+            fqChart.data.datasets[1].data = prediction.actual_X.map((x, i) => ({
+                x: x,
+                y: prediction.actual_y[i]
+            }));
+            fqChart.update();
+            
+            // Update Q-table
+            updateQTable(prediction.q_table);
+        }
+        
+        function updateQTable(qTable) {
+            const container = document.getElementById('q-table-container');
+            container.innerHTML = '';
+            
+            const table = document.createElement('table');
+            table.className = 'q-table';
+            
+            // Create header
+            const thead = document.createElement('thead');
+            const headerRow = document.createElement('tr');
+            headerRow.appendChild(document.createElement('th'));
+            
+            for (let i = 0; i < 20; i++) {
+                const th = document.createElement('th');
+                th.textContent = `A${i}`;
+                headerRow.appendChild(th);
+            }
+            
+            thead.appendChild(headerRow);
+            table.appendChild(thead);
+            
+            // Create body
+            const tbody = document.createElement('tbody');
+            const maxQ = Math.max(...qTable.flat());
+            const minQ = Math.min(...qTable.flat());
+            
+            for (let i = 0; i < 20; i++) {
+                const row = document.createElement('tr');
+                const stateHeader = document.createElement('th');
+                stateHeader.textContent = `S${i}`;
+                row.appendChild(stateHeader);
+                
+                for (let j = 0; j < 20; j++) {
+                    const cell = document.createElement('td');
+                    const value = qTable[i][j];
+                    
+                    // Normalize for color intensity
+                    const normalized = (value - minQ) / (maxQ - minQ);
+                    const intensity = isNaN(normalized) ? 0 : normalized;
+                    
+                    cell.style.backgroundColor = `rgba(0, 128, 0, ${intensity})`;
+                    cell.style.color = intensity > 0.5 ? 'white' : 'black';
+                    cell.title = `State S${i}, Action A${j}: ${value.toFixed(2)}`;
+                    
+                    // Only show values for the best action in each state
+                    const bestAction = qTable[i].indexOf(Math.max(...qTable[i]));
+                    if (j === bestAction) {
+                        cell.textContent = value.toFixed(1);
+                    }
+                    
+                    row.appendChild(cell);
+                }
+                
+                tbody.appendChild(row);
+            }
+            
+            table.appendChild(tbody);
+            container.appendChild(table);
+        }
+        
+        function updateComparisonChart(predictions) {
+            const scores = [
+                predictions.decision_tree?.score || 0,
+                predictions.svm?.score || 0,
+                predictions.gradient_boosting?.score || 0,
+                predictions.federated_q?.score || 0
+            ];
+            
+            comparisonChart.data.datasets[0].data = scores;
+            comparisonChart.update();
+        }
+        
+        function updateLearningMetrics(prediction) {
+            // Add to history
+            rewardHistory.push(prediction.reward);
+            scoreHistory.push(prediction.score);
+            
+            // Keep last 20 points
+            if (rewardHistory.length > 20) {
+                rewardHistory = rewardHistory.slice(-20);
+                scoreHistory = scoreHistory.slice(-20);
+            }
+            
+            // Update learning chart
+            learningChart.data.labels = Array.from({length: rewardHistory.length}, (_, i) => i + 1);
+            learningChart.data.datasets[0].data = rewardHistory;
+            learningChart.data.datasets[1].data = scoreHistory;
+            learningChart.update();
+            
+            // Update exploration rate visualization
+            const explorationRate = prediction.exploration_rate || 0.25;
+            document.getElementById('exploration-progress').style.width = `${explorationRate * 100}%`;
+            
+            // Update learning rate badge
+            const learningRate = prediction.learning_rate || 0.15;
+            document.getElementById('learning-rate-badge').textContent = learningRate.toFixed(2);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precision Agriculture Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.css">
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+        }
+        .dashboard-header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 0;
+            margin-bottom: 20px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: none;
+        }
+        .card-header {
+            border-radius: 10px 10px 0 0 !important;
+            font-weight: bold;
+            color: white;
+        }
+        .flower-card .card-header {
+            background-color: #e83e8c;
+        }
+        .rice-card .card-header {
+            background-color: #28a745;
+        }
+        .potato-card .card-header {
+            background-color: #fd7e14;
+        }
+        .model-card {
+            height: 100%;
+        }
+        .model-card .card-body {
+            padding: 15px;
+        }
+        .prediction-display {
+            text-align: center;
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: rgba(0, 0, 0, 0.03);
+            border-radius: 8px;
+        }
+        .prediction-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .prediction-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .model-score {
+            font-size: 0.9rem;
+            font-weight: bold;
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: 3px 10px;
+            border-radius: 10px;
+        }
+        .log-entry {
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        #status-indicator {
+            font-size: 0.9rem;
+            padding: 5px 10px;
+        }
+        .alert-item {
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            color: white;
+        }
+        .alert-low {
+            background-color: #ffc107;
+        }
+        .alert-high {
+            background-color: #dc3545;
+        }
+        .alert-critical {
+            background-color: #6f42c1;
+        }
+        .health-indicator {
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .health-bar {
+            height: 100%;
+        }
+        .health-healthy {
+            background-color: #28a745;
+        }
+        .health-moderate {
+            background-color: #ffc107;
+        }
+        .health-poor {
+            background-color: #dc3545;
+        }
+        .optimal-range {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        .crop-icon {
+            font-size: 1.5rem;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-header">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-8">
+                    <h1>Precision Agriculture Monitoring System</h1>
+                    <p class="mb-0">Monitoring flower, rice, and potato crops</p>
+                </div>
+                <div class="col-md-4 text-end">
+                    <span id="status-indicator" class="badge bg-secondary">Idle</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Field selector and control buttons -->
+        <div class="row field-selector mb-4">
+            <div class="col-md-6">
+                <label for="field-select" class="form-label">Select Field:</label>
+                <select id="field-select" class="form-select">
+                    {% for field in fields %}
+                    <option value="{{ field }}">{{ field }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 control-buttons d-flex align-items-end">
+                <button id="start-btn" class="btn btn-success me-2">▶ Start Monitoring</button>
+                <button id="stop-btn" class="btn btn-danger me-2" disabled>⏹ Stop</button>
+                <button id="irrigate-btn" class="btn btn-primary">💧 Irrigate</button>
+            </div>
+        </div>
+
+        <!-- Crop Overview -->
+        <div class="row">
+            <div class="col-md-4">
+                <div class="card flower-card">
+                    <div class="card-header">
+                        <span class="crop-icon">🌹</span> Flower Field Status
+                    </div>
+                    <div class="card-body">
+                        <div class="health-indicator mb-2">
+                            <div id="flower-health-bar" class="health-bar health-healthy" style="width: 100%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Health: <strong id="flower-health-status">healthy</strong></span>
+                            <span>Score: <strong id="flower-health-score">100</strong></span>
+                        </div>
+                        <div class="optimal-range mt-2">
+                            Optimal ranges: Moisture 50-70%, Temp 18-26°C, Light 800-1200 lux
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card rice-card">
+                    <div class="card-header">
+                        <span class="crop-icon">🌾</span> Rice Field Status
+                    </div>
+                    <div class="card-body">
+                        <div class="health-indicator mb-2">
+                            <div id="rice-health-bar" class="health-bar health-healthy" style="width: 100%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Health: <strong id="rice-health-status">healthy</strong></span>
+                            <span>Score: <strong id="rice-health-score">100</strong></span>
+                        </div>
+                        <div class="optimal-range mt-2">
+                            Optimal ranges: Moisture 75-90%, Temp 25-32°C, Light 700-1100 lux
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card potato-card">
+                    <div class="card-header">
+                        <span class="crop-icon">🥔</span> Potato Field Status
+                    </div>
+                    <div class="card-body">
+                        <div class="health-indicator mb-2">
+                            <div id="potato-health-bar" class="health-bar health-healthy" style="width: 100%"></div>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Health: <strong id="potato-health-status">healthy</strong></span>
+                            <span>Score: <strong id="potato-health-score">100</strong></span>
+                        </div>
+                        <div class="optimal-range mt-2">
+                            Optimal ranges: Moisture 45-65%, Temp 15-22°C, Light 600-900 lux
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main content rows -->
+        <div class="row mt-4">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">Sensor Data Visualization</div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs" id="chartTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="moisture-tab" data-bs-toggle="tab" data-bs-target="#moisture-chart" type="button" role="tab">Moisture</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="temperature-tab" data-bs-toggle="tab" data-bs-target="#temperature-chart" type="button" role="tab">Temperature</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="light-tab" data-bs-toggle="tab" data-bs-target="#light-chart" type="button" role="tab">Light</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="health-tab" data-bs-toggle="tab" data-bs-target="#health-chart" type="button" role="tab">Health</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content p-3" id="chartTabsContent">
+                            <div class="tab-pane fade show active" id="moisture-chart" role="tabpanel">
+                                <canvas id="moistureChart"></canvas>
+                            </div>
+                            <div class="tab-pane fade" id="temperature-chart" role="tabpanel">
+                                <canvas id="temperatureChart"></canvas>
+                            </div>
+                            <div class="tab-pane fade" id="light-chart" role="tabpanel">
+                                <canvas id="lightChart"></canvas>
+                            </div>
+                            <div class="tab-pane fade" id="health-chart" role="tabpanel">
+                                <canvas id="healthChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-header">Current Readings</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <div class="sensor-label">Moisture</div>
+                            <div id="current-moisture" class="sensor-value">--%</div>
+                            <div id="moisture-range" class="optimal-range"></div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="sensor-label">Temperature</div>
+                            <div id="current-temperature" class="sensor-value">--°C</div>
+                            <div id="temperature-range" class="optimal-range"></div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="sensor-label">Light</div>
+                            <div id="current-light" class="sensor-value">-- lux</div>
+                            <div id="light-range" class="optimal-range"></div>
+                        </div>
+                        <div class="mb-3">
+                            <div class="sensor-label">Soil pH</div>
+                            <div id="current-ph" class="sensor-value">--</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mt-4">
+                    <div class="card-header">Active Alerts</div>
+                    <div class="card-body" style="max-height: 200px; overflow-y: auto;">
+                        <div id="alerts-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ML Predictions Section -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">ML Model Predictions (Temperature vs Moisture)</div>
+                    <div class="card-body">
+                        <canvas id="mlPredictionsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Model Cards -->
+        <div class="row mt-4">
+            <div class="col-md-4">
+                <div class="card model-card">
+                    <div class="card-header bg-danger text-white">
+                        Decision Tree
+                        <span id="dt-score" class="model-score float-end">R²: --</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="prediction-display">
+                            <div class="prediction-value" id="dt-prediction">--%</div>
+                            <div class="prediction-label">Predicted Moisture</div>
+                        </div>
+                        <canvas id="dtChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card model-card">
+                    <div class="card-header bg-success text-white">
+                        SVM
+                        <span id="svm-score" class="model-score float-end">R²: --</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="prediction-display">
+                            <div class="prediction-value" id="svm-prediction">--%</div>
+                            <div class="prediction-label">Predicted Moisture</div>
+                        </div>
+                        <canvas id="svmChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card model-card">
+                    <div class="card-header bg-primary text-white">
+                        Gradient Boosting
+                        <span id="gb-score" class="model-score float-end">R²: --</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="prediction-display">
+                            <div class="prediction-value" id="gb-prediction">--%</div>
+                            <div class="prediction-label">Predicted Moisture</div>
+                        </div>
+                        <canvas id="gbChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Section -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">Event Log</div>
+                    <div class="card-body" style="max-height: 200px; overflow-y: auto;">
+                        <div id="log-container"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <script>
+        let socket;
+        let selectedField = document.getElementById('field-select').value;
+        let charts = {};
+        let mlCharts = {};
+        let modelCharts = {};
+        let fieldData = {};
+        let optimalRanges = {
+            "Flower Field": {
+                moisture: [50, 70],
+                temperature: [18, 26],
+                light: [800, 1200]
+            },
+            "Rice Field": {
+                moisture: [75, 90],
+                temperature: [25, 32],
+                light: [700, 1100]
+            },
+            "Potato Field": {
+                moisture: [45, 65],
+                temperature: [15, 22],
+                light: [600, 900]
+            }
+        };
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            initializeCharts();
+            setupEventListeners();
+            
+            {% for field in fields %}
+                fieldData["{{ field }}"] = {
+                    moisture: [], temperature: [], light: [], 
+                    humidity: [], soil_ph: [], timestamps: [], health: []
+                };
+            {% endfor %}
+        });
+
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                updateStatus('Connected', 'bg-success');
+            });
+            
+            socket.on('disconnect', function() {
+                updateStatus('Disconnected', 'bg-danger');
+            });
+            
+            socket.on('sensor_data', function(data) {
+                const field = data.field_name;
+                const readings = data.data.readings;
+                const metadata = data.data.metadata;
+                const timestamp = new Date(data.data.timestamp);
+                
+                if (fieldData[field]) {
+                    fieldData[field].moisture.push(readings.moisture);
+                    fieldData[field].temperature.push(readings.temperature);
+                    fieldData[field].light.push(readings.light);
+                    fieldData[field].humidity.push(readings.humidity);
+                    fieldData[field].soil_ph.push(readings.soil_ph);
+                    fieldData[field].timestamps.push(timestamp);
+                    fieldData[field].health.push(metadata.health_score);
+                    
+                    const maxPoints = 50;
+                    for (const key in fieldData[field]) {
+                        if (fieldData[field][key].length > maxPoints) {
+                            fieldData[field][key] = fieldData[field][key].slice(-maxPoints);
+                        }
+                    }
+                    
+                    if (field === selectedField) {
+                        updateCharts();
+                        updateCurrentReadings(readings);
+                    }
+                    
+                    // Update health indicators
+                    updateHealthIndicator(field, metadata.health_score, metadata.health_status);
+                }
+            });
+            
+            socket.on('ml_predictions', function(predictions) {
+                updateMLPredictions(predictions);
+                updateModelCharts(predictions);
+                updateModelScores(predictions);
+            });
+            
+            socket.on('log_message', function(data) {
+                addLogEntry(data.message, data.type);
+            });
+            
+            socket.on('alert', function(data) {
+                addAlert(data);
+            });
+        }
+        
+        function initializeCharts() {
+            // Main sensor charts
+            charts.moisture = new Chart(
+                document.getElementById('moistureChart'),
+                getChartConfig('Moisture (%)', 'rgb(54, 162, 235)', 0, 100)
+            );
+            
+            charts.temperature = new Chart(
+                document.getElementById('temperatureChart'),
+                getChartConfig('Temperature (°C)', 'rgb(255, 99, 132)', 0, 40)
+            );
+            
+            charts.light = new Chart(
+                document.getElementById('lightChart'),
+                getChartConfig('Light (lux)', 'rgb(255, 205, 86)', 0, 1500)
+            );
+            
+            charts.health = new Chart(
+                document.getElementById('healthChart'),
+                getChartConfig('Health Score', 'rgb(40, 167, 69)', 0, 100)
+            );
+            
+            // ML Predictions chart
+            mlCharts.predictions = new Chart(
+                document.getElementById('mlPredictionsChart'),
+                getMLChartConfig()
+            );
+            
+            // Model-specific charts
+            modelCharts.decisionTree = new Chart(
+                document.getElementById('dtChart'),
+                getModelChartConfig('rgb(255, 99, 132)')
+            );
+            
+            modelCharts.svm = new Chart(
+                document.getElementById('svmChart'),
+                getModelChartConfig('rgb(75, 192, 192)')
+            );
+            
+            modelCharts.gradientBoosting = new Chart(
+                document.getElementById('gbChart'),
+                getModelChartConfig('rgb(153, 102, 255)')
+            );
+        }
+        
+        function getChartConfig(label, color, min, max) {
+            return {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: label,
+                        data: [],
+                        borderColor: color,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { min: min, max: max, title: { display: true, text: label } },
+                        x: { title: { display: true, text: 'Time' } }
+                    }
+                }
+            };
+        }
+        
+        function getMLChartConfig() {
+            return {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Actual Data',
+                            data: [],
+                            backgroundColor: 'rgb(54, 162, 235)',
+                            pointRadius: 6
+                        },
+                        {
+                            label: 'Decision Tree',
+                            data: [],
+                            borderColor: 'rgb(255, 99, 132)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            showLine: true
+                        },
+                        {
+                            label: 'SVM',
+                            data: [],
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            showLine: true
+                        },
+                        {
+                            label: 'Gradient Boosting',
+                            data: [],
+                            borderColor: 'rgb(153, 102, 255)',
+                            backgroundColor: 'rgba(153, 102, 255, 0.1)',
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            showLine: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: { display: true, text: 'ML Model Predictions' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: ${context.parsed.x.toFixed(1)}°C, ${context.parsed.y.toFixed(1)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: 'Temperature (°C)' } },
+                        y: { title: { display: true, text: 'Moisture (%)' } }
+                    }
+                }
+            };
+        }
+        
+        function getModelChartConfig(color) {
+            return {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        data: [],
+                        borderColor: color,
+                        backgroundColor: color.replace(')', ', 0.1)'),
+                        borderWidth: 2,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { title: { display: true, text: 'Temperature (°C)' } },
+                        y: { title: { display: true, text: 'Moisture (%)' }, min: 0, max: 100 }
+                    }
+                }
+            };
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('field-select').addEventListener('change', function() {
+                selectedField = this.value;
+                updateCharts();
+                updateOptimalRangeDisplay();
+            });
+            
+            document.getElementById('start-btn').addEventListener('click', function() {
+                socket.emit('start_simulation');
+                document.getElementById('start-btn').disabled = true;
+                document.getElementById('stop-btn').disabled = false;
+                updateStatus('Running', 'bg-success');
+                addLogEntry('Data collection started', 'info');
+            });
+            
+            document.getElementById('stop-btn').addEventListener('click', function() {
+                socket.emit('stop_simulation');
+                document.getElementById('start-btn').disabled = false;
+                document.getElementById('stop-btn').disabled = true;
+                updateStatus('Idle', 'bg-secondary');
+                addLogEntry('Data collection stopped', 'info');
+            });
+            
+            document.getElementById('irrigate-btn').addEventListener('click', function() {
+                if (confirm(`Send irrigation command to ${selectedField}?`)) {
+                    socket.emit('send_irrigation_command', {field_name: selectedField});
+                }
+            });
+        }
+        
+        function updateCharts() {
+            const data = fieldData[selectedField];
+            if (!data || data.timestamps.length === 0) return;
+            
+            const startTime = data.timestamps[0];
+            const labels = data.timestamps.map(t => {
+                return ((t - startTime) / (1000 * 60)).toFixed(1); // minutes
+            });
+            
+            // Update moisture chart
+            charts.moisture.data.labels = labels;
+            charts.moisture.data.datasets[0].data = data.moisture;
+            charts.moisture.update();
+            
+            // Update temperature chart
+            charts.temperature.data.labels = labels;
+            charts.temperature.data.datasets[0].data = data.temperature;
+            charts.temperature.update();
+            
+            // Update light chart
+            charts.light.data.labels = labels;
+            charts.light.data.datasets[0].data = data.light;
+            charts.light.update();
+            
+            // Update health chart
+            charts.health.data.labels = labels;
+            charts.health.data.datasets[0].data = data.health;
+            charts.health.update();
+        }
+        
+        function updateCurrentReadings(readings) {
+            document.getElementById('current-moisture').textContent = `${readings.moisture}%`;
+            document.getElementById('current-temperature').textContent = `${readings.temperature}°C`;
+            document.getElementById('current-light').textContent = `${readings.light} lux`;
+            document.getElementById('current-ph').textContent = readings.soil_ph;
+            
+            updateOptimalRangeDisplay();
+        }
+        
+        function updateOptimalRangeDisplay() {
+            const ranges = optimalRanges[selectedField];
+            
+            document.getElementById('moisture-range').textContent = 
+                `Optimal: ${ranges.moisture[0]}% to ${ranges.moisture[1]}%`;
+            document.getElementById('temperature-range').textContent = 
+                `Optimal: ${ranges.temperature[0]}°C to ${ranges.temperature[1]}°C`;
+            document.getElementById('light-range').textContent = 
+                `Optimal: ${ranges.light[0]} to ${ranges.light[1]} lux`;
+        }
+        
+        function updateMLPredictions(predictions) {
+            mlCharts.predictions.data.datasets.forEach(dataset => {
+                dataset.data = [];
+            });
+            
+            if (predictions.decision_tree) {
+                const actualData = predictions.decision_tree.actual_X.map((x, i) => ({
+                    x: x,
+                    y: predictions.decision_tree.actual_y[i]
+                }));
+                mlCharts.predictions.data.datasets[0].data = actualData;
+                
+                const dtData = predictions.decision_tree.X.map((x, i) => ({
+                    x: x,
+                    y: predictions.decision_tree.y[i]
+                }));
+                mlCharts.predictions.data.datasets[1].data = dtData;
+            }
+            
+            if (predictions.svm) {
+                const svmData = predictions.svm.X.map((x, i) => ({
+                    x: x,
+                    y: predictions.svm.y[i]
+                }));
+                mlCharts.predictions.data.datasets[2].data = svmData;
+            }
+            
+            if (predictions.gradient_boosting) {
+                const gbData = predictions.gradient_boosting.X.map((x, i) => ({
+                    x: x,
+                    y: predictions.gradient_boosting.y[i]
+                }));
+                mlCharts.predictions.data.datasets[3].data = gbData;
+            }
+            
+            mlCharts.predictions.update();
+        }
+        
+        function updateModelCharts(predictions) {
+            if (predictions.decision_tree) {
+                modelCharts.decisionTree.data.labels = predictions.decision_tree.X;
+                modelCharts.decisionTree.data.datasets[0].data = predictions.decision_tree.y;
+                modelCharts.decisionTree.update();
+            }
+            
+            if (predictions.svm) {
+                modelCharts.svm.data.labels = predictions.svm.X;
+                modelCharts.svm.data.datasets[0].data = predictions.svm.y;
+                modelCharts.svm.update();
+            }
+            
+            if (predictions.gradient_boosting) {
+                modelCharts.gradientBoosting.data.labels = predictions.gradient_boosting.X;
+                modelCharts.gradientBoosting.data.datasets[0].data = predictions.gradient_boosting.y;
+                modelCharts.gradientBoosting.update();
+            }
+        }
+        
+        function updateModelScores(predictions) {
+            if (predictions.decision_tree) {
+                document.getElementById('dt-score').textContent = `R²: ${predictions.decision_tree.score.toFixed(2)}`;
+                document.getElementById('dt-prediction').textContent = `${predictions.decision_tree.current_pred}%`;
+            }
+            
+            if (predictions.svm) {
+                document.getElementById('svm-score').textContent = `R²: ${predictions.svm.score.toFixed(2)}`;
+                document.getElementById('svm-prediction').textContent = `${predictions.svm.current_pred}%`;
+            }
+            
+            if (predictions.gradient_boosting) {
+                document.getElementById('gb-score').textContent = `R²: ${predictions.gradient_boosting.score.toFixed(2)}`;
+                document.getElementById('gb-prediction').textContent = `${predictions.gradient_boosting.current_pred}%`;
+            }
+        }
+        
+        function updateHealthIndicator(field, score, status) {
+            const fieldId = field.toLowerCase().replace(' ', '-');
+            const bar = document.getElementById(`${fieldId}-health-bar`);
+            const scoreElement = document.getElementById(`${fieldId}-health-score`);
+            const statusElement = document.getElementById(`${fieldId}-health-status`);
+            
+            bar.style.width = `${score}%`;
+            bar.className = `health-bar health-${status}`;
+            scoreElement.textContent = Math.round(score);
+            statusElement.textContent = status;
+        }
+        
+        function updateStatus(text, bgClass) {
+            const indicator = document.getElementById('status-indicator');
+            indicator.textContent = text;
+            indicator.className = `badge ${bgClass}`;
+        }
+        
+        function addLogEntry(message, type = 'info') {
+            const logContainer = document.getElementById('log-container');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            if (logContainer.children.length > 100) {
+                logContainer.removeChild(logContainer.children[0]);
+            }
+        }
+        
+        function addAlert(alertData) {
+            const container = document.getElementById('alerts-container');
+            const alert = document.createElement('div');
+            alert.className = `alert-item alert-${alertData.level}`;
+            
+            alert.innerHTML = `
+                <strong>${alertData.field}: ${alertData.type} alert</strong><br>
+                ${alertData.message}<br>
+                <small>${new Date().toLocaleTimeString()}</small>
+            `;
+            
+            container.insertBefore(alert, container.firstChild);
+            
+            if (container.children.length > 5) {
+                container.removeChild(container.lastChild);
+            }
+        }
+    </script>
+</body>
+</html>
